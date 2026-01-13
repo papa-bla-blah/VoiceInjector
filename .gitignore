@@ -1,0 +1,27 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xcuserdatad
+xcuserdata/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Build artifacts
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# CocoaPods (if used later)
+Pods/
+
+# Temporary files
+*.swp
+*.swo
+*~
+agent.md
+progress_sum.md

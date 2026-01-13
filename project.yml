@@ -1,0 +1,53 @@
+name: VoiceInjector
+options:
+  bundleIdPrefix: com.ogsaas
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    PRODUCT_NAME: VoiceInjector
+    MARKETING_VERSION: 1.0.0
+    CURRENT_PROJECT_VERSION: 1
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  VoiceInjector:
+    type: application
+    platform: macOS
+    sources:
+      - path: VoiceInjector/Sources
+        type: group
+      - path: VoiceInjector/Resources
+        type: group
+    settings:
+      base:
+        INFOPLIST_FILE: VoiceInjector/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: VoiceInjector/Resources/VoiceInjector.entitlements
+        PRODUCT_BUNDLE_IDENTIFIER: com.ogsaas.voiceinjector
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_HARDENED_RUNTIME: YES
+        COMBINE_HIDPI_IMAGES: YES
+    info:
+      path: VoiceInjector/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: VoiceInjector
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
+        CFBundleName: $(PRODUCT_NAME)
+        CFBundlePackageType: APPL
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        LSUIElement: true
+        NSMicrophoneUsageDescription: "VoiceInjector needs microphone access to capture your speech for text-to-speech conversion."
+        NSSpeechRecognitionUsageDescription: "VoiceInjector uses speech recognition to convert your voice into text."
+        NSHighResolutionCapable: true
+    entitlements:
+      path: VoiceInjector/Resources/VoiceInjector.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+        com.apple.security.device.audio-input: true
