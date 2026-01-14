@@ -87,6 +87,33 @@ class StatusBarController: NSObject {
         
         menu.addItem(NSMenuItem.separator())
         
+        // Audio Mode submenu
+        let audioModeItem = NSMenuItem(title: "Audio Mode", action: nil, keyEquivalent: "")
+        let audioModeMenu = NSMenu()
+        
+        let standardModeItem = NSMenuItem(
+            title: "Standard Mode",
+            action: #selector(setStandardMode),
+            keyEquivalent: ""
+        )
+        standardModeItem.target = self
+        standardModeItem.state = !speechManager.voiceIsolationEnabled ? .on : .off
+        audioModeMenu.addItem(standardModeItem)
+        
+        let voiceIsolationItem = NSMenuItem(
+            title: "Voice Isolation",
+            action: #selector(setVoiceIsolation),
+            keyEquivalent: ""
+        )
+        voiceIsolationItem.target = self
+        voiceIsolationItem.state = speechManager.voiceIsolationEnabled ? .on : .off
+        audioModeMenu.addItem(voiceIsolationItem)
+        
+        audioModeItem.submenu = audioModeMenu
+        menu.addItem(audioModeItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
         // Permissions submenu
         let permissionsItem = NSMenuItem(title: "Permissions", action: nil, keyEquivalent: "")
         let permissionsMenu = NSMenu()
@@ -153,6 +180,16 @@ class StatusBarController: NSObject {
     
     @objc private func toggleListening() {
         speechManager.toggleListening()
+        refreshMenu()
+    }
+    
+    @objc private func setStandardMode() {
+        speechManager.voiceIsolationEnabled = false
+        refreshMenu()
+    }
+    
+    @objc private func setVoiceIsolation() {
+        speechManager.voiceIsolationEnabled = true
         refreshMenu()
     }
     

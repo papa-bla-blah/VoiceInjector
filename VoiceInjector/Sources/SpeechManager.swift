@@ -26,6 +26,19 @@ class SpeechManager: ObservableObject {
             }
         }
     }
+    @Published var voiceIsolationEnabled: Bool = false {
+        didSet {
+            debugLog("Voice Isolation: \(voiceIsolationEnabled ? "ENABLED" : "DISABLED")")
+            // Restart if currently listening to apply new settings
+            if isListening {
+                Task { @MainActor in
+                    self.stopListening()
+                    try? await Task.sleep(nanoseconds: 200_000_000) // 200ms
+                    self.startListening()
+                }
+            }
+        }
+    }
     
     // MARK: - Properties
     
@@ -33,12 +46,14 @@ class SpeechManager: ObservableObject {
     private let speechRecognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
+    private let gainNode = AVAudioUnitEQ(numberOfBands: 1)
     
     private let silenceThreshold: TimeInterval = 1.8
     private var silenceTimer: Timer?
     private var isRestarting: Bool = false
     private var consecutiveErrors: Int = 0
     private let maxConsecutiveErrors = 3
+    private let inputGainBoost: Float = 2.5  // 2.5x amplification for better sensitivity
     
     // MARK: - Initialization
     
@@ -84,7 +99,7 @@ class SpeechManager: ObservableObject {
         
         if audioEngine.isRunning {
             audioEngine.stop()
-            audioEngine.inputNode.removeTap(onBus: 0)
+            gainNode.removeTap(onBus: 0)
         }
         
         isListening = false
@@ -123,7 +138,7 @@ class SpeechManager: ObservableObject {
         
         if audioEngine.isRunning {
             audioEngine.stop()
-            audioEngine.inputNode.removeTap(onBus: 0)
+            gainNode.removeTap(onBus: 0)
         }
         
         // Create recognition request
@@ -141,13 +156,63 @@ class SpeechManager: ObservableObject {
         
         // Setup audio
         let inputNode = audioEngine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
-        debugLog("Audio format: \(recordingFormat.sampleRate)Hz, \(recordingFormat.channelCount) ch")
         
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: recordingFormat) { [weak self] buffer, time in
-            self?.recognitionRequest?.append(buffer)
-            // Feed audio to visualizer
-            AudioLevelMonitor.shared.processBuffer(buffer)
+        // Configure gain node for input boost
+        gainNode.globalGain = inputGainBoost
+        gainNode.bypass = false
+        debugLog("Input gain boost: \(inputGainBoost)x")
+        
+        // Attach and connect gain node
+        audioEngine.attach(gainNode)
+        
+        // Configure voice processing BEFORE getting the format
+        if voiceIsolationEnabled {
+            // Set voice processing AGC (Automatic Gain Control) mode
+            do {
+                let voiceIOFormat = AVAudioFormat(
+                    commonFormat: .pcmFormatFloat32,
+                    sampleRate: 16000,
+                    channels: 1,
+                    interleaved: false
+                )
+                
+                if let voiceIOFormat = voiceIOFormat {
+                    // Connect: input -> gain -> tap
+                    audioEngine.connect(inputNode, to: gainNode, format: voiceIOFormat)
+                    
+                    // Install tap AFTER gain node for boosted audio
+                    gainNode.installTap(onBus: 0, bufferSize: 4096, format: voiceIOFormat) { [weak self] buffer, time in
+                        self?.recognitionRequest?.append(buffer)
+                        AudioLevelMonitor.shared.processBuffer(buffer)
+                    }
+                    debugLog("Voice isolation mode ENABLED (16kHz mono with voice processing + gain)")
+                } else {
+                    throw SpeechError.requestCreationFailed
+                }
+            } catch {
+                debugLog("Failed to enable voice isolation: \(error.localizedDescription)")
+                // Fallback to standard mode
+                let recordingFormat = inputNode.outputFormat(forBus: 0)
+                audioEngine.connect(inputNode, to: gainNode, format: recordingFormat)
+                gainNode.installTap(onBus: 0, bufferSize: 4096, format: recordingFormat) { [weak self] buffer, time in
+                    self?.recognitionRequest?.append(buffer)
+                    AudioLevelMonitor.shared.processBuffer(buffer)
+                }
+            }
+        } else {
+            // Standard mode - use default hardware format
+            let recordingFormat = inputNode.outputFormat(forBus: 0)
+            debugLog("Audio format: \(recordingFormat.sampleRate)Hz, \(recordingFormat.channelCount) ch")
+            
+            // Connect: input -> gain -> tap
+            audioEngine.connect(inputNode, to: gainNode, format: recordingFormat)
+            
+            // Install tap AFTER gain node for boosted audio
+            gainNode.installTap(onBus: 0, bufferSize: 4096, format: recordingFormat) { [weak self] buffer, time in
+                self?.recognitionRequest?.append(buffer)
+                AudioLevelMonitor.shared.processBuffer(buffer)
+            }
+            debugLog("Standard mode ENABLED with gain boost")
         }
         
         audioEngine.prepare()
@@ -242,7 +307,7 @@ class SpeechManager: ObservableObject {
                 
                 if self.audioEngine.isRunning {
                     self.audioEngine.stop()
-                    self.audioEngine.inputNode.removeTap(onBus: 0)
+                    self.gainNode.removeTap(onBus: 0)
                 }
                 
                 self.consecutiveErrors = 0
